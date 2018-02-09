@@ -12,6 +12,8 @@ import argparse
 from sanic import Sanic
 from sanic.log import logger
 from sanic import response
+from sanic_cors import CORS
+
 import mercantile
 import yaml
 
@@ -90,8 +92,7 @@ async def get_jsonstyle(request):
 
     return await response.file(
         Config.style,
-        headers={"Content-Type": "application/json",
-                 "Access-Control-Allow-Origin": "*"}
+        headers={"Content-Type": "application/json"}
     )
 
 
@@ -119,8 +120,7 @@ async def get_tile(request, x, y, z):
 
     return response.raw(
         pbf,
-        headers={"Content-Type": "application/x-protobuf",
-                 "Access-Control-Allow-Origin": "*"}
+        headers={"Content-Type": "application/x-protobuf"}
     )
 
 
@@ -135,6 +135,7 @@ def main():
     parser.add_argument('--password', type=str, help='postgres password', default='')
     parser.add_argument('--listen', type=str, help='listen address', default='127.0.0.1')
     parser.add_argument('--listen-port', type=str, help='listen address', default=8080)
+    parser.add_argument('--cors', action='store_true', help='make cross-origin AJAX possible')
     args = parser.parse_args()
 
     if args.tm2:
@@ -148,6 +149,9 @@ def main():
 
     # interpolate values for postgres connection
     Config.dsn = Config.dsn.format(**args.__dict__)
+
+    if args.cors:
+        CORS(app)
 
     app.run(host=args.listen, port=args.listen_port)
 

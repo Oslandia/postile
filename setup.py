@@ -9,6 +9,7 @@ requirements = (
     'cython',
     'mercantile',
     'sanic',
+    'sanic-cors',
     'pyyaml',
     'asyncpg',
 )
