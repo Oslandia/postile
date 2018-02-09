@@ -1,6 +1,2 @@
-cython
-mercantile
-pyproj
-sanic
-pyyaml
 git+https://github.com/MagicStack/asyncpg#egg=asyncpg
+-e .
