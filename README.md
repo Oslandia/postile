@@ -20,3 +20,4 @@ Fast Mapbox Vector Tile Server
 
     postile --help
 
+*For a concrete example using OpenMapTiles schema see [this tutorial](https://github.com/ldgeo/postile-openmaptiles)*
