@@ -134,7 +134,7 @@ def main():
     parser.add_argument('--user', type=str, help='postgres user', default='')
     parser.add_argument('--password', type=str, help='postgres password', default='')
     parser.add_argument('--listen', type=str, help='listen address', default='127.0.0.1')
-    parser.add_argument('--listen-port', type=str, help='listen address', default=8080)
+    parser.add_argument('--listen-port', type=str, help='listen port', default=8080)
     parser.add_argument('--cors', action='store_true', help='make cross-origin AJAX possible')
     args = parser.parse_args()
 
