@@ -14,8 +14,8 @@ Fast Mapbox Vector Tile Server
 **Python 3.6** is required to run Postile
 
     pip install cython
-    pip install -r requirements.txt
-
+    pip install -e .
+    
 ## Usage 
 
     postile --help

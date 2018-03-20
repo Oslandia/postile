@@ -1,2 +1,0 @@
-git+https://github.com/MagicStack/asyncpg#egg=asyncpg
--e .

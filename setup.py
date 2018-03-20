@@ -11,7 +11,7 @@ requirements = (
     'sanic',
     'sanic-cors',
     'pyyaml',
-    'asyncpg',
+    'asyncpg>=0.15.0',
 )
 
 
