@@ -96,7 +96,7 @@ async def get_jsonstyle(request):
     )
 
 
-@app.route(r'/tiles/<z:int>/<x:int>/<y:int>.pbf')
+@app.route(r'/<z:int>/<x:int>/<y:int>.pbf')
 async def get_tile(request, x, y, z):
 
     scale_denominator = zoom_to_scale_denom(z)
