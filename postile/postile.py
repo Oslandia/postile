@@ -60,6 +60,14 @@ def zoom_to_scale_denom(zoom):
     return MAP_WIDTH_IN_METRES / (map_width_in_pixels * STANDARDIZED_PIXEL_SIZE)
 
 
+def resolution(zoom):
+    """
+    Takes a web mercator zoom level and returns the pixel resolution for that
+    scale according to the global TILE_WIDTH_IN_PIXELS size
+    """
+    return MAP_WIDTH_IN_METRES / (TILE_WIDTH_IN_PIXELS * (2 ** zoom))
+
+
 def prepared_query(filename):
     with io.open(filename, 'r') as stream:
         layers = yaml.load(stream)
@@ -96,27 +104,75 @@ async def get_jsonstyle(request):
     )
 
 
-@app.route(r'/<z:int>/<x:int>/<y:int>.pbf')
-async def get_tile(request, x, y, z):
-
+async def get_tile_tm2(request, x, y, z):
+    """
+    """
     scale_denominator = zoom_to_scale_denom(z)
 
     # compute mercator bounds
-    mbounds = mercantile.xy_bounds(x, y, z)
-    sqlbbox = f"st_makebox2d(st_point({mbounds.left}, {mbounds.bottom}), st_point({mbounds.right},{mbounds.top}))"
+    bounds = mercantile.xy_bounds(x, y, z)
+    bbox = f"st_makebox2d(st_point({bounds.left}, {bounds.bottom}), st_point({bounds.right},{bounds.top}))"
+
+    sql = Config.tm2query.format(
+        bbox=bbox,
+        scale_denominator=scale_denominator,
+        pixel_width=256,
+        pixel_height=256,
+    )
+    logger.debug(sql)
 
     async with request.app.db.acquire() as conn:
-        st = Config.tm2query.format(
-            bbox=sqlbbox,
-            scale_denominator=scale_denominator,
-            pixel_width=256,
-            pixel_height=256,
-        )
         async with conn.transaction():
             # Postgres requires non-scrollable cursors to be created
             # and used in a transaction.
             # join tiles into one bytes string except null tiles
-            pbf = b''.join([rec[0] async for rec in conn.cursor(st) if rec[0]])
+            pbf = b''.join([rec[0] async for rec in conn.cursor(sql) if rec[0]])
+
+    return response.raw(
+        pbf,
+        headers={"Content-Type": "application/x-protobuf"}
+    )
+
+async def get_tile_postgis(request, x, y, z):
+    """
+    Direct access to a postgis layer
+    """
+    if 'layer' not in request.raw_args:
+        return response.text('no layer given', status=404)
+
+    layer = request.raw_args['layer']
+    if ' ' in layer:
+        return response.text('bad layer name: {}'.format(layer), status=404)
+
+    # get fields given in parameters
+    fields = ',' + request.raw_args['fields'] if 'fields' in request.raw_args else ''
+    # get geometry column name from query args else geom is used
+    geom = request.raw_args.get('geom', 'geom')
+    # compute mercator bounds
+    bounds = mercantile.xy_bounds(x, y, z)
+    # make bbox for filtering
+    bbox = f"st_makebox2d(st_point({bounds.left}, {bounds.bottom}), st_point({bounds.right},{bounds.top}))"
+    # compute pixel resolution
+    scale = resolution(z)
+
+    sql = """
+        select st_asmvt(tile, '{layer}', 4096)
+        from (
+            select * from (
+                select
+                    st_asmvtgeom(st_simplify({geom}, {scale}, true), {bbox}) as mvtgeom
+                    {fields}
+                from {layer}
+                where {bbox} && {geom}
+            ) _ where mvtgeom is not null
+        ) as tile
+    """.format(**locals())
+
+    logger.debug(sql)
+
+    async with request.app.db.acquire() as conn:
+        async with conn.transaction():
+            pbf = b''.join([rec[0] async for rec in conn.cursor(sql) if rec[0]])
 
     return response.raw(
         pbf,
@@ -145,6 +201,12 @@ def main():
             sys.exit(1)
         # build the SQL query for all layers found in TM2 file
         Config.tm2query = prepared_query(args.tm2)
+        # add route dedicated to tm2 queries
+        app.add_route(get_tile_tm2, r'/<z:int>/<x:int>/<y:int>.pbf', methods=['GET'])
+
+    else:
+        # no tm2 file given, switching to direct connection to postgis layers
+        app.add_route(get_tile_postgis, r'/<z:int>/<x:int>/<y:int>.pbf', methods=['GET'])
 
     Config.style = args.style
 
