@@ -25,7 +25,7 @@ app = Sanic()
 
 class Config:
     # postgresql DSN
-    dsn = 'postgres://{user}:{password}@{host}:{port}/{database}'
+    dsn = 'postgres://{pguser}:{pgpassword}@{pghost}:{pgport}/{pgdatabase}'
     # tm2source prepared query
     tm2query = None
     # style configuration file
@@ -184,11 +184,11 @@ def main():
     parser = argparse.ArgumentParser(description='Fast VectorTile server with PostGIS backend')
     parser.add_argument('--tm2', type=str, help='TM2 source file (yaml)')
     parser.add_argument('--style', type=str, help='GL Style to serve at /style.json')
-    parser.add_argument('--database', type=str, help='database name', default='osm')
-    parser.add_argument('--host', type=str, help='postgres hostname', default='')
-    parser.add_argument('--port', type=int, help='postgres port', default=5432)
-    parser.add_argument('--user', type=str, help='postgres user', default='')
-    parser.add_argument('--password', type=str, help='postgres password', default='')
+    parser.add_argument('--pgdatabase', type=str, help='database name', default='osm')
+    parser.add_argument('--pghost', type=str, help='postgres hostname', default='')
+    parser.add_argument('--pgport', type=int, help='postgres port', default=5432)
+    parser.add_argument('--pguser', type=str, help='postgres user', default='')
+    parser.add_argument('--pgpassword', type=str, help='postgres password', default='')
     parser.add_argument('--listen', type=str, help='listen address', default='127.0.0.1')
     parser.add_argument('--listen-port', type=str, help='listen port', default=8080)
     parser.add_argument('--cors', action='store_true', help='make cross-origin AJAX possible')

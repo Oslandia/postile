@@ -30,7 +30,7 @@ docker run --network host oslandia/postile postile --help
 
 ## Example of serving one table from postgis
 
-postile --user **** --password **** --database mydb --host localhost --listen-port 8080 --cors
+postile --pguser **** --pgpassword **** --pgdatabase mydb --pghost localhost --listen-port 8080 --cors
 
 Then all postgis layers in database `mydb` can be served with: 
 
