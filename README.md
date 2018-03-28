@@ -1,7 +1,6 @@
 # Postile 
 
-[![Docker Automated build](https://img.shields.io/docker/automated/oslandia/postile.svg)]()
-[![Docker Pulls](https://img.shields.io/docker/pulls/oslandia/postile.svg)]()
+[![Docker image](https://images.microbadger.com/badges/image/oslandia/postile.svg)](https://hub.docker.com/r/oslandia/postile/)
 
 Fast Mapbox Vector Tile Server
 
@@ -34,7 +33,7 @@ Then layer `boundaries` can be served with:
 
     http://localhost:8080/z/x/y.pbf?layer=boundaries&fields=id,name
 
-`fields` is optionnal, and when absent only geometries are encoded in the vector tile.
+`fields` is optional, and when absent only geometries are encoded in the vector tile.
 
 ---
 *For a concrete example using OpenMapTiles schema see [this tutorial](https://github.com/ldgeo/postile-openmaptiles)*
