@@ -1,5 +1,8 @@
 # Postile 
 
+[![Docker Automated build](https://img.shields.io/docker/automated/oslandia/postile.svg)]()
+[![Docker Pulls](https://img.shields.io/docker/pulls/oslandia/postile.svg)]()
+
 Fast Mapbox Vector Tile Server
 
 ## Features
@@ -15,9 +18,20 @@ Fast Mapbox Vector Tile Server
 
     pip install cython
     pip install -e .
-    
-## Usage 
-
     postile --help
 
+## Installation using a Docker container
+
+Start Postile with:
+
+docker run --network host oslandia/postile postile --help
+
 *For a concrete example using OpenMapTiles schema see [this tutorial](https://github.com/ldgeo/postile-openmaptiles)*
+
+## Example of serving one table from postgis
+
+postile --user **** --password **** --database mydb --host localhost --listen-port 8080 --cors
+
+Then all postgis layers in database `mydb` can be served with: 
+
+    http://localhost:8080/z/x/y.pbf?layer=boundaries&fields=id,name
