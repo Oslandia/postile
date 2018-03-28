@@ -24,14 +24,16 @@ Fast Mapbox Vector Tile Server
 
 Start Postile with:
 
-docker run --network host oslandia/postile postile --help
-
-*For a concrete example using OpenMapTiles schema see [this tutorial](https://github.com/ldgeo/postile-openmaptiles)*
+    docker run --network host oslandia/postile postile --help
 
 ## Example of serving one table from postgis
 
-postile --pguser **** --pgpassword **** --pgdatabase mydb --pghost localhost --listen-port 8080 --cors
+    postile --pguser **** --pgpassword **** --pgdatabase mydb --pghost localhost --listen-port 8080 --cors
 
 Then all postgis layers in database `mydb` can be served with: 
 
     http://localhost:8080/z/x/y.pbf?layer=boundaries&fields=id,name
+
+
+---
+*For a concrete example using OpenMapTiles schema see [this tutorial](https://github.com/ldgeo/postile-openmaptiles)*
