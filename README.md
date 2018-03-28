@@ -26,14 +26,15 @@ Start Postile with:
 
     docker run --network host oslandia/postile postile --help
 
-## Example of serving one table from postgis
+## Example of serving postgis layers individually
 
     postile --pguser **** --pgpassword **** --pgdatabase mydb --pghost localhost --listen-port 8080 --cors
 
-Then all postgis layers in database `mydb` can be served with: 
+Then layer `boundaries` can be served with: 
 
     http://localhost:8080/z/x/y.pbf?layer=boundaries&fields=id,name
 
+`fields` is optionnal, and when absent only geometries are encoded in the vector tile.
 
 ---
 *For a concrete example using OpenMapTiles schema see [this tutorial](https://github.com/ldgeo/postile-openmaptiles)*
