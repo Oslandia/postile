@@ -6,10 +6,14 @@ Fast Mapbox Vector Tile Server
 
 ## Features
 
-- serve Mapbox Vector Tiles from a PostGIS backend (PostGIS >= 2.4.0)
+- serve Mapbox Vector Tiles from a PostGIS backend 
 - can read TM2Source files with postgis sources
 - Connection pooling and asynchronous requests thanks to [asyncpg](https://github.com/MagicStack/asyncpg)
-- tested against [openmaptiles vector tile schema](https://github.com/openmaptiles/openmaptiles)
+- tested with [openmaptiles vector tile schema](https://github.com/openmaptiles/openmaptiles)
+
+## Requires 
+
+A PostGIS (version >= 2.4.0) enabled database with features stored in Web Mercator projection (EPSG:3857)
 
 ## Installation 
 
@@ -19,7 +23,7 @@ Fast Mapbox Vector Tile Server
     pip install -e .
     postile --help
 
-## Installation using a Docker container
+## Using a Docker container
 
 Start Postile with:
 
