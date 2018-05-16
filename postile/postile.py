@@ -28,6 +28,8 @@ class Config:
     dsn = 'postgres://{pguser}:{pgpassword}@{pghost}:{pgport}/{pgdatabase}'
     # tm2source prepared query
     tm2query = None
+    # tm2 source srid
+    tm2srid = None
     # style configuration file
     style = None
 
@@ -90,7 +92,7 @@ def prepared_query(filename):
 
         queries.append(query)
 
-    return " union all ".join(queries)
+    return layer['Datasource']['srid'], " union all ".join(queries)
 
 
 @app.route('/style.json')
@@ -107,11 +109,20 @@ async def get_jsonstyle(request):
 async def get_tile_tm2(request, x, y, z):
     """
     """
-    scale_denominator = zoom_to_scale_denom(z)
+    srid = request.raw_args.get('srid')
 
-    # compute mercator bounds
-    bounds = mercantile.xy_bounds(x, y, z)
-    bbox = f"st_makebox2d(st_point({bounds.left}, {bounds.bottom}), st_point({bounds.right},{bounds.top}))"
+    if not srid:
+        scale_denominator = zoom_to_scale_denom(z)
+        # compute mercator bounds
+        bounds = mercantile.xy_bounds(x, y, z)
+        bbox = f"st_makebox2d(st_point({bounds.left}, {bounds.bottom}), st_point({bounds.right},{bounds.top}))"
+        srid = Config.tm2srid
+    else:
+        west, south, east, north = [
+            float(arg) for arg in request.raw_args['BBOX'].split(',')
+        ]
+        bbox = f"st_transform(st_setsrid(st_makebox2d(st_point({west}, {south}), st_point({east},{north})), {srid}), {Config.tm2srid})"
+        scale_denominator = (east - west) / (TILE_WIDTH_IN_PIXELS * STANDARDIZED_PIXEL_SIZE)
 
     sql = Config.tm2query.format(
         bbox=bbox,
@@ -200,7 +211,7 @@ def main():
             print(f'file does not exists: {args.tm2}')
             sys.exit(1)
         # build the SQL query for all layers found in TM2 file
-        Config.tm2query = prepared_query(args.tm2)
+        Config.tm2srid, Config.tm2query = prepared_query(args.tm2)
         # add route dedicated to tm2 queries
         app.add_route(get_tile_tm2, r'/<z:int>/<x:int>/<y:int>.pbf', methods=['GET'])
 
