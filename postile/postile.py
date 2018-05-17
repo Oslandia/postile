@@ -21,6 +21,7 @@ import asyncio
 import asyncpg
 
 from postile.sql import single_layer
+
 # https://github.com/openstreetmap/mapnik-stylesheets/blob/master/zoom-to-scale.txt
 # map width in meters for web mercator 3857
 MAP_WIDTH_IN_METRES = 40075016.68557849
@@ -30,7 +31,8 @@ STANDARDIZED_PIXEL_SIZE = 0.00028
 # prepare regexp to extract the query from a tm2 table subquery
 LAYERQUERY = re.compile(r'\s*\((?P<query>.*)\)\s+as\s+\w+\s*', re.IGNORECASE | re.DOTALL)
 
-# default output srid
+# the de facto standard projection for web mapping applications
+# official EPSG code
 OUTPUT_SRID = 3857
 
 app = Sanic()
@@ -80,16 +82,20 @@ def prepared_query(filename):
         # Remove whitespaces, subquery parenthesis and final alias
         query = LAYERQUERY.match(layer['Datasource']['table']).group('query')
 
-        query = query.replace("geometry", "st_asmvtgeom(geometry, {bbox}) as mvtgeom")
+        query = query.replace(
+            layer['Datasource']['geometry_field'],
+            "st_asmvtgeom({}, {{bbox}}) as mvtgeom"
+            .format(layer['Datasource']['geometry_field'])
+        )
         query = query.replace('!bbox!', '{bbox}')
         query = query.replace('!scale_denominator!', "{scale_denominator}")
         query = query.replace('!pixel_width!', '{pixel_width}')
         query = query.replace('!pixel_height!', '{pixel_height}')
 
         query = """
-            select st_asmvt(tile, '%s', 4096, 'mvtgeom')
-            from (%s where st_asmvtgeom(geometry, {bbox}) is not null) as tile
-        """ % (layer['id'], query)
+            select st_asmvt(tile, '{}', 4096, 'mvtgeom')
+            from ({} where st_asmvtgeom({}, {{bbox}}) is not null) as tile
+        """.format(layer['id'], query, layer['Datasource']['geometry_field'])
 
         queries.append(query)
 

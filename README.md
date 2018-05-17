@@ -7,8 +7,9 @@ Fast Mapbox Vector Tile Server
 ## Features
 
 - serve Mapbox Vector Tiles from a PostGIS backend 
-- handle on the fly reprojection to web mercator projection.
-- can read TM2Source files with postgis sources
+- can read TM2 file data sources with postgis 
+- can serve PostGIS layers individually 
+- handle on-the-fly reprojection to web mercator projection (only for single layers, not tm2 sources)
 - Connection pooling and asynchronous requests thanks to [asyncpg](https://github.com/MagicStack/asyncpg)
 - tested with [openmaptiles vector tile schema](https://github.com/openmaptiles/openmaptiles)
 
