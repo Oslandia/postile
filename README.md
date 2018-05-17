@@ -1,4 +1,4 @@
-# Postile 
+# PosTile 
 
 [![Docker image](https://images.microbadger.com/badges/image/oslandia/postile.svg)](https://hub.docker.com/r/oslandia/postile/)
 
@@ -7,13 +7,14 @@ Fast Mapbox Vector Tile Server
 ## Features
 
 - serve Mapbox Vector Tiles from a PostGIS backend 
+- handle on the fly reprojection to web mercator projection.
 - can read TM2Source files with postgis sources
 - Connection pooling and asynchronous requests thanks to [asyncpg](https://github.com/MagicStack/asyncpg)
 - tested with [openmaptiles vector tile schema](https://github.com/openmaptiles/openmaptiles)
 
 ## Requires 
 
-A PostGIS (version >= 2.4.0) enabled database with features stored in Web Mercator projection (EPSG:3857)
+- features stored with PostGIS >= 2.4.0
 
 ## Installation 
 
@@ -35,7 +36,7 @@ Start Postile with:
 
 Then layer `boundaries` can be served with: 
 
-    http://localhost:8080/z/x/y.pbf?layer=boundaries&fields=id,name
+    http://localhost:8080/boundaries/z/x/y.pbf?fields=id,name
 
 `fields` is optional, and when absent only geometries are encoded in the vector tile.
 

@@ -20,6 +20,19 @@ import yaml
 import asyncio
 import asyncpg
 
+from postile.sql import single_layer
+# https://github.com/openstreetmap/mapnik-stylesheets/blob/master/zoom-to-scale.txt
+# map width in meters for web mercator 3857
+MAP_WIDTH_IN_METRES = 40075016.68557849
+TILE_WIDTH_IN_PIXELS = 256.0
+STANDARDIZED_PIXEL_SIZE = 0.00028
+
+# prepare regexp to extract the query from a tm2 table subquery
+LAYERQUERY = re.compile(r'\s*\((?P<query>.*)\)\s+as\s+\w+\s*', re.IGNORECASE | re.DOTALL)
+
+# default output srid
+OUTPUT_SRID = 3857
+
 app = Sanic()
 
 
@@ -30,16 +43,6 @@ class Config:
     tm2query = None
     # style configuration file
     style = None
-
-
-# https://github.com/openstreetmap/mapnik-stylesheets/blob/master/zoom-to-scale.txt
-# map width in meters for web mercator 3857
-MAP_WIDTH_IN_METRES = 40075016.68557849
-TILE_WIDTH_IN_PIXELS = 256.0
-STANDARDIZED_PIXEL_SIZE = 0.00028
-
-# prepare regexp to extract the query from a tm2 table subquery
-LAYERQUERY = re.compile(r'\s*\((?P<query>.*)\)\s+as\s+\w+\s*', re.IGNORECASE | re.DOTALL)
 
 
 @app.listener('before_server_start')
@@ -133,14 +136,10 @@ async def get_tile_tm2(request, x, y, z):
         headers={"Content-Type": "application/x-protobuf"}
     )
 
-async def get_tile_postgis(request, x, y, z):
+async def get_tile_postgis(request, x, y, z, layer):
     """
     Direct access to a postgis layer
     """
-    if 'layer' not in request.raw_args:
-        return response.text('no layer given', status=404)
-
-    layer = request.raw_args['layer']
     if ' ' in layer:
         return response.text('bad layer name: {}'.format(layer), status=404)
 
@@ -150,23 +149,14 @@ async def get_tile_postgis(request, x, y, z):
     geom = request.raw_args.get('geom', 'geom')
     # compute mercator bounds
     bounds = mercantile.xy_bounds(x, y, z)
+
     # make bbox for filtering
-    bbox = f"st_makebox2d(st_point({bounds.left}, {bounds.bottom}), st_point({bounds.right},{bounds.top}))"
+    bbox = f"st_setsrid(st_makebox2d(st_point({bounds.left}, {bounds.bottom}), st_point({bounds.right},{bounds.top})), {OUTPUT_SRID})"
+
     # compute pixel resolution
     scale = resolution(z)
 
-    sql = """
-        select st_asmvt(tile, '{layer}', 4096)
-        from (
-            select * from (
-                select
-                    st_asmvtgeom(st_simplify({geom}, {scale}, true), {bbox}) as mvtgeom
-                    {fields}
-                from {layer}
-                where {bbox} && {geom}
-            ) _ where mvtgeom is not null
-        ) as tile
-    """.format(**locals())
+    sql = single_layer.format(**locals(), OUTPUT_SRID=OUTPUT_SRID)
 
     logger.debug(sql)
 
@@ -206,7 +196,7 @@ def main():
 
     else:
         # no tm2 file given, switching to direct connection to postgis layers
-        app.add_route(get_tile_postgis, r'/<z:int>/<x:int>/<y:int>.pbf', methods=['GET'])
+        app.add_route(get_tile_postgis, r'/<layer>/<z:int>/<x:int>/<y:int>.pbf', methods=['GET'])
 
     Config.style = args.style
 
