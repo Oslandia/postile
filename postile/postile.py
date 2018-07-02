@@ -45,6 +45,8 @@ class Config:
     tm2query = None
     # style configuration file
     style = None
+    # database connection pool
+    db = None
 
 
 @app.listener('before_server_start')
@@ -52,12 +54,12 @@ async def setup_db(app, loop):
     """
     initiate postgresql connection
     """
-    app.db = await asyncpg.create_pool(Config.dsn, loop=loop)
+    Config.db = await asyncpg.create_pool(Config.dsn, loop=loop)
 
 
 @app.listener('after_server_stop')
 async def cleanup_db(app, loop):
-    await app.db.close()
+    await Config.db.close()
 
 
 def zoom_to_scale_denom(zoom):
@@ -130,12 +132,10 @@ async def get_tile_tm2(request, x, y, z):
     )
     logger.debug(sql)
 
-    async with request.app.db.acquire() as conn:
-        async with conn.transaction():
-            # Postgres requires non-scrollable cursors to be created
-            # and used in a transaction.
-            # join tiles into one bytes string except null tiles
-            pbf = b''.join([rec[0] async for rec in conn.cursor(sql) if rec[0]])
+    async with Config.db.acquire() as conn:
+        # join tiles into one bytes string except null tiles
+        rows = await conn.fetch(sql)
+        pbf = b''.join([row[0] for row in rows if row[0]])
 
     return response.raw(
         pbf,
@@ -166,9 +166,9 @@ async def get_tile_postgis(request, x, y, z, layer):
 
     logger.debug(sql)
 
-    async with request.app.db.acquire() as conn:
-        async with conn.transaction():
-            pbf = b''.join([rec[0] async for rec in conn.cursor(sql) if rec[0]])
+    async with Config.db.acquire() as conn:
+        rows = await conn.fetch(sql)
+        pbf = b''.join([row[0] for row in rows if row[0]])
 
     return response.raw(
         pbf,
