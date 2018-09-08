@@ -32,10 +32,16 @@ def find_version(*file_paths):
                        "Should be at the first line of __init__.py.")
 
 
+with open("README.md", "r") as fh:
+    long_description = fh.read()
+
+
 setup(
     name='Postile',
     version=find_version('postile', '__init__.py'),
     description="Fast Vector Tile Server",
+    long_description=long_description,
+    long_description_content_type="text/markdown",
     url='https://github.com/ldgeo/postile',
     author='ldgeo',
     author_email='contact@oslandia.com',
