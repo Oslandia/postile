@@ -8,8 +8,8 @@ here = os.path.abspath(os.path.dirname(__file__))
 requirements = (
     'cython',
     'mercantile',
-    'sanic',
-    'sanic-cors',
+    'sanic==0.8.1',
+    'sanic-cors==0.9.5',
     'pyyaml',
     'asyncpg>=0.15.0',
 )
