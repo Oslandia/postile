@@ -21,7 +21,7 @@ from (
             , {bbox}) as mvtgeom
             {fields}
         from {layer}
-        where st_transform({bbox}, tmp.srid) && {geom}
+        where st_transform({bbox}, tmp.srid) && {geom} and length >= {min_length}
     ) _ where mvtgeom is not null
 ) as tile
 """
