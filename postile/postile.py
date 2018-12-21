@@ -8,6 +8,7 @@ import os
 import sys
 import re
 import argparse
+import time
 
 from sanic import Sanic
 from sanic.log import logger
@@ -53,8 +54,6 @@ LAYERQUERY = re.compile(
     r"\s*\((?P<query>.*)\)\s+as\s+\w+\s*", re.IGNORECASE | re.DOTALL
 )
 
-
-
 app = Sanic()
 
 
@@ -63,6 +62,7 @@ class Config:
     dsn = "postgres://{pguser}:{pgpassword}@{pghost}:{pgport}/{pgdatabase}"
     # tm2source prepared query
     tm2query = None
+    auto_tm2_ts = None
     # style configuration file
     style = None
     # database connection pool
@@ -96,8 +96,11 @@ def resolution(map_width_in_metres, zoom):
 
 
 def prepared_query(filename):
-    with io.open(filename, "r") as stream:
-        layers = yaml.load(stream)
+    if type(filename) == 'str':
+        with io.open(filename, "r") as stream:
+            layers = yaml.load(stream)
+    else:
+        layers = filename
 
     queries = []
     for layer in layers["Layer"]:
@@ -114,6 +117,7 @@ def prepared_query(filename):
         query = query.replace("!scale_denominator!", "{scale_denominator}")
         query = query.replace("!pixel_width!", "{pixel_width}")
         query = query.replace("!pixel_height!", "{pixel_height}")
+        query = query.replace("!min_length!", "{min_length}")
 
         query = """
             select st_asmvt(tile, '{}', 4096, 'mvtgeom')
@@ -136,6 +140,25 @@ async def get_jsonstyle(request):
         Config.style, headers={"Content-Type": "application/json"}
     )
 
+def sql_bbox(x, y, z, output_srid = None):
+    if output_srid is None:
+        bounds = mercantile.xy_bounds(x, y, z)
+        return ("st_makebox2d(st_point({bounds.left}, {bounds.bottom}), st_point({bounds.right},{bounds.top}))".format(**locals()), 0)
+
+    # compute mercator bounds
+    tile_count = pow(2, z)
+    tile_width_in_metres = (map_bbox.right - map_bbox.left) / tile_count
+    tile_height_in_metres = (map_bbox.top - map_bbox.bottom) / tile_count
+
+    left = map_bbox.left + x * tile_width_in_metres
+    right = map_bbox.left + (x + 1) * tile_width_in_metres
+    top = map_bbox.top - y * tile_height_in_metres
+    bottom = map_bbox.top - (y + 1) * tile_height_in_metres
+    # bounds = mercantile.xy_bounds(x, y, z)
+    bounds = Bbox(left, bottom, right, top)
+
+    return ("st_setsrid(st_makebox2d(st_point({bounds.left}, {bounds.bottom}), st_point({bounds.right},{bounds.top})), {output_srid})".format(**locals()), tile_width_in_metres / 50.0)
+
 
 async def get_tile_tm2(request, x, y, z):
     """
@@ -143,15 +166,36 @@ async def get_tile_tm2(request, x, y, z):
     scale_denominator = zoom_to_scale_denom(z)
 
     # compute mercator bounds
-    bounds = mercantile.xy_bounds(x, y, z)
-    bbox = "st_makebox2d(st_point({bounds.left}, {bounds.bottom}), st_point({bounds.right},{bounds.top}))".format(**locals())
+    bbox, min_length = sql_bbox(x, y, z, '3949')
+
+    if Config.tm2query == None or (time.monotonic() - Config.auto_tm2_ts) > 10:
+        # build it
+        async with Config.db.acquire() as conn:
+            rows = await conn.fetch("select table_name from INFORMATION_SCHEMA.COLUMNS where COLUMN_NAME like 'geom'")
+            table_names = [r['table_name'] for r in rows]
+            sources = []
+            for table in table_names:
+                if '3949' not in table:
+                    continue
+                source = {
+                    'Datasource': {
+                        'geometry_field': 'geom',
+                        'table': '(select geom from layer_{}(!bbox!::box2d, !min_length!::float)) AS t'.format(table)
+                    },
+                    'id': table
+                }
+                sources += [source]
+            Config.tm2query = prepared_query({ 'Layer': sources })
+            Config.auto_tm2_ts = time.monotonic()
 
     sql = Config.tm2query.format(
         bbox=bbox,
         scale_denominator=scale_denominator,
         pixel_width=256,
         pixel_height=256,
+        min_length=min_length,
     )
+    print(sql)
     logger.debug(sql)
 
     async with Config.db.acquire() as conn:
@@ -173,23 +217,10 @@ async def get_tile_postgis(request, x, y, z, layer):
     fields = "," + request.raw_args["fields"] if "fields" in request.raw_args else ""
     # get geometry column name from query args else geom is used
     geom = request.raw_args.get("geom", "geom")
-    # compute mercator bounds
-    tile_count = pow(2, z)
-    tile_width_in_metres = (map_bbox.right - map_bbox.left) / tile_count
-    tile_height_in_metres = (map_bbox.top - map_bbox.bottom) / tile_count
-
-    left = map_bbox.left + x * tile_width_in_metres
-    right = map_bbox.left + (x + 1) * tile_width_in_metres
-    top = map_bbox.top - y * tile_height_in_metres
-    bottom = map_bbox.top - (y + 1) * tile_height_in_metres
-    # bounds = mercantile.xy_bounds(x, y, z)
-    bounds = Bbox(left, bottom, right, top)
-
-    output_srid = '3949'
     # make bbox for filtering
-    bbox = "st_setsrid(st_makebox2d(st_point({bounds.left}, {bounds.bottom}), st_point({bounds.right},{bounds.top})), {output_srid})".format(**locals())
+    output_srid = '3949'
+    bbox, min_length = sql_bbox(x, y, z, output_srid)
 
-    min_length = tile_width_in_metres / 50.0;
     # compute pixel resolution
     scale = resolution((map_bbox.right - map_bbox.left), z)
 
@@ -229,11 +260,13 @@ def main():
     args = parser.parse_args()
 
     if args.tm2:
-        if not os.path.exists(args.tm2):
-            print("file does not exists: {args.tm2}".format(**locals()))
-            sys.exit(1)
-        # build the SQL query for all layers found in TM2 file
-        Config.tm2query = prepared_query(args.tm2)
+        if args.tm2 != 'auto':
+            if not os.path.exists(args.tm2):
+                print("file does not exists: {args.tm2}".format(**locals()))
+                sys.exit(1)
+            else:
+                # build the SQL query for all layers found in TM2 file
+                Config.tm2query = prepared_query(args.tm2)
         # add route dedicated to tm2 queries
         app.add_route(get_tile_tm2, r"/<z:int>/<x:int>/<y:int>.pbf", methods=["GET"])
 
