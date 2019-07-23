@@ -109,7 +109,7 @@ def prepared_query(filename):
 
         query = query.replace(
             layer["Datasource"]["geometry_field"],
-            "st_asmvtgeom({}, {{bbox}}) as mvtgeom".format(
+            "st_asmvtgeom(st_intersection({}, {{bbox}}), {{bbox}}) as mvtgeom".format(
                 layer["Datasource"]["geometry_field"]
             ),
         )
@@ -121,7 +121,7 @@ def prepared_query(filename):
 
         query = """
             select st_asmvt(tile, '{}', 4096, 'mvtgeom')
-            from ({} where st_asmvtgeom({}, {{bbox}}) is not null) as tile
+            from ({} where st_asmvtgeom(st_intersection({}, {{bbox}}), {{bbox}}) is not null) as tile
         """.format(
             layer["id"], query, layer["Datasource"]["geometry_field"]
         )
