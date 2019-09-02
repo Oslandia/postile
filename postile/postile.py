@@ -110,7 +110,7 @@ def prepared_query(filename):
 @app.route('/style.json')
 async def get_jsonstyle(request):
     if not Config.style:
-        return response.text('no style available')
+        return response.text('no style available', status=404)
 
     return await response.file(
         Config.style,
