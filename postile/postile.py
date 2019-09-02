@@ -8,6 +8,7 @@ import os
 import sys
 import re
 import argparse
+from pathlib import Path 
 
 from sanic import Sanic
 from sanic.log import logger
@@ -50,6 +51,7 @@ class Config:
     style = None
     # database connection pool
     db = None
+    fonts = None
 
 
 @app.listener('before_server_start')
@@ -117,6 +119,14 @@ async def get_jsonstyle(request):
         headers={"Content-Type": "application/json"}
     )
 
+@app.route('/fonts/<fontstack:string>/<frange:string>.pbf')
+async def get_fonts(request, fontstack, frange):
+    if not Config.fonts:
+        return response.text('no fonts available', status=404)
+    return await response.file(
+        Path(Config.fonts) / fontstack / f'{frange}.pbf',
+        headers={"Content-Type": "application/x-protobuf"}
+    )
 
 async def get_tile_tm2(request, x, y, z):
     """
@@ -192,6 +202,7 @@ def main():
     parser.add_argument('--listen-port', type=str, help='listen port', default=8080)
     parser.add_argument('--cors', action='store_true', help='make cross-origin AJAX possible')
     parser.add_argument('--debug', action='store_true', help='activate sanic debug mode')
+    parser.add_argument('--fonts', type=str, help='fonts location')
     args = parser.parse_args()
 
     if args.tm2:
@@ -208,6 +219,7 @@ def main():
         app.add_route(get_tile_postgis, r'/<layer>/<z:int>/<x:int>/<y:int>.pbf', methods=['GET'])
 
     Config.style = args.style
+    Config.fonts = args.fonts
 
     # interpolate values for postgres connection
     Config.dsn = Config.dsn.format(**args.__dict__)
