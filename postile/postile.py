@@ -80,7 +80,7 @@ def resolution(zoom):
 
 def prepared_query(filename):
     with io.open(filename, 'r') as stream:
-        layers = yaml.load(stream)
+        layers = yaml.load(stream, Loader=yaml.FullLoader)
 
     queries = []
     for layer in layers['Layer']:
