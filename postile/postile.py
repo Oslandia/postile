@@ -37,6 +37,9 @@ OUTPUT_SRID = 3857
 
 app = Sanic()
 
+# lower zooms can take a while to generate (ie zoom 0->4) 
+app.config.RESPONSE_TIMEOUT = 60 * 2
+
 
 class Config:
     # postgresql DSN
