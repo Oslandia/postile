@@ -1,0 +1,2 @@
+include postile/static/*
+include postile/templates/*.html

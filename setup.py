@@ -12,6 +12,7 @@ requirements = (
     'sanic-cors==0.9.9.post1',
     'pyyaml',
     'asyncpg>=0.15.0',
+    'jinja2'
 )
 
 
