@@ -21,6 +21,8 @@ import yaml
 import asyncio
 import asyncpg
 
+from jinja2 import Environment, PackageLoader, select_autoescape
+
 from postile.sql import single_layer
 
 # https://github.com/openstreetmap/mapnik-stylesheets/blob/master/zoom-to-scale.txt
@@ -41,6 +43,13 @@ app = Sanic()
 # lower zooms can take a while to generate (ie zoom 0->4) 
 app.config.RESPONSE_TIMEOUT = 60 * 2
 
+# where am i ? 
+here = Path(os.path.abspath(os.path.dirname(__file__)))
+
+jinja_env = Environment(
+    loader=PackageLoader('postile', 'templates'),
+    autoescape=select_autoescape(['html', 'xml'])
+)
 
 class Config:
     # postgresql DSN
@@ -188,6 +197,30 @@ async def get_tile_postgis(request, x, y, z, layer):
         headers={"Content-Type": "application/x-protobuf"}
     )
 
+def preview(request):
+    """build and return a preview page
+    """
+    if app.debug:
+        template = jinja_env.get_template('index-debug.html')
+    else:
+        template = jinja_env.get_template('index.html')
+
+    html_content = template.render(host=request.host, scheme=request.scheme)
+    return response.html(html_content)
+
+def config_tm2(tm2file):
+    """Adds specific routes for tm2 source and prepare the global SQL Query
+
+    """
+    if not os.path.exists(tm2file):
+        print(f'file does not exists: {tm2file}')
+        sys.exit(1)
+    # build the SQL query for all layers found in TM2 file
+    Config.tm2query = prepared_query(tm2file)
+    # add route dedicated to tm2 queries
+    app.add_route(get_tile_tm2, r'/<z:int>/<x:int>/<y:int>.pbf', methods=['GET'])
+    app.add_route(preview, r'/', methods=['GET'])
+
 
 def main():
     parser = argparse.ArgumentParser(description='Fast VectorTile server with PostGIS backend')
@@ -206,14 +239,7 @@ def main():
     args = parser.parse_args()
 
     if args.tm2:
-        if not os.path.exists(args.tm2):
-            print(f'file does not exists: {args.tm2}')
-            sys.exit(1)
-        # build the SQL query for all layers found in TM2 file
-        Config.tm2query = prepared_query(args.tm2)
-        # add route dedicated to tm2 queries
-        app.add_route(get_tile_tm2, r'/<z:int>/<x:int>/<y:int>.pbf', methods=['GET'])
-
+        config_tm2(args.tm2)
     else:
         # no tm2 file given, switching to direct connection to postgis layers
         app.add_route(get_tile_postgis, r'/<layer>/<z:int>/<x:int>/<y:int>.pbf', methods=['GET'])
@@ -226,6 +252,9 @@ def main():
 
     if args.cors:
         CORS(app)
+
+    # add static route for the favicon 
+    app.static('/favicon.ico', str(here / 'static/favicon.ico'))
 
     app.run(
         host=args.listen,
