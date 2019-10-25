@@ -5,6 +5,7 @@ inspired by https://github.com/openmaptiles/postserve
 """
 import io
 import os
+import socket
 import sys
 import re
 import argparse
@@ -72,7 +73,16 @@ async def setup_db_pg(app, loop):
     initiate postgresql connection
     """
     if Config.dsn:
-        Config.db_pg = await asyncpg.create_pool(Config.dsn, loop=loop)
+        try:
+            Config.db_pg = await asyncpg.create_pool(Config.dsn, loop=loop)
+        except socket.gaierror:
+            print(f'Cannot establish connection to {Config.dsn}. \
+Did you pass correct values to --pghost?')
+            raise
+        except asyncpg.exceptions.InvalidPasswordError:
+            print(f'Cannot connect to {Config.dsn}. \
+Please check values passed to --pguser and --pgpassword')
+            raise
 
 
 @app.listener('after_server_stop')
