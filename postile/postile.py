@@ -8,6 +8,7 @@ import os
 import sys
 import re
 import argparse
+import sqlite3
 from pathlib import Path 
 
 from sanic import Sanic
@@ -53,27 +54,31 @@ jinja_env = Environment(
 
 class Config:
     # postgresql DSN
-    dsn = 'postgres://{pguser}:{pgpassword}@{pghost}:{pgport}/{pgdatabase}'
+    dsn = None
     # tm2source prepared query
     tm2query = None
+    # sqlite3 connection
+    db_sqlite = None
     # style configuration file
     style = None
     # database connection pool
-    db = None
+    db_pg = None
     fonts = None
 
 
 @app.listener('before_server_start')
-async def setup_db(app, loop):
+async def setup_db_pg(app, loop):
     """
     initiate postgresql connection
     """
-    Config.db = await asyncpg.create_pool(Config.dsn, loop=loop)
+    if Config.dsn:
+        Config.db_pg = await asyncpg.create_pool(Config.dsn, loop=loop)
 
 
 @app.listener('after_server_stop')
-async def cleanup_db(app, loop):
-    await Config.db.close()
+async def cleanup_db_pg(app, loop):
+    if Config.dsn:
+        await Config.db_pg.close()
 
 
 def zoom_to_scale_denom(zoom):
@@ -137,6 +142,25 @@ async def get_fonts(request, fontstack, frange):
         headers={"Content-Type": "application/x-protobuf"}
     )
 
+async def get_mbtiles(request, z, x, y):
+    # Flip Y coordinate because MBTiles store tiles in TMS.
+    coords = (x, (1 << z) - 1 - y, z)
+    cursor = Config.db_sqlite.execute("""
+        SELECT tile_data 
+        FROM tiles 
+        WHERE tile_column=? and tile_row=? and zoom_level=?
+        LIMIT 1 """, coords)
+
+    tile = cursor.fetchone()
+    if tile: 
+        return response.raw(
+            tile[0], 
+            headers={"Content-Type": "application/x-protobuf",
+                     "Content-Encoding": "gzip"})
+    else: 
+        return response.raw(b'', 
+            headers={"Content-Type": "application/x-protobuf"})
+
 async def get_tile_tm2(request, x, y, z):
     """
     """
@@ -154,7 +178,7 @@ async def get_tile_tm2(request, x, y, z):
     )
     logger.debug(sql)
 
-    async with Config.db.acquire() as conn:
+    async with Config.db_pg.acquire() as conn:
         # join tiles into one bytes string except null tiles
         rows = await conn.fetch(sql)
         pbf = b''.join([row[0] for row in rows if row[0]])
@@ -188,7 +212,7 @@ async def get_tile_postgis(request, x, y, z, layer):
 
     logger.debug(sql)
 
-    async with Config.db.acquire() as conn:
+    async with Config.db_pg.acquire() as conn:
         rows = await conn.fetch(sql)
         pbf = b''.join([row[0] for row in rows if row[0]])
 
@@ -212,9 +236,6 @@ def config_tm2(tm2file):
     """Adds specific routes for tm2 source and prepare the global SQL Query
 
     """
-    if not os.path.exists(tm2file):
-        print(f'file does not exists: {tm2file}')
-        sys.exit(1)
     # build the SQL query for all layers found in TM2 file
     Config.tm2query = prepared_query(tm2file)
     # add route dedicated to tm2 queries
@@ -222,9 +243,25 @@ def config_tm2(tm2file):
     app.add_route(preview, r'/', methods=['GET'])
 
 
+def config_mbtiles(mbtiles):
+    """Adds specific routes for mbtiles source
+
+    """
+    Config.db_sqlite = sqlite3.connect(mbtiles)
+    app.add_route(get_mbtiles, r'/<z:int>/<x:int>/<y:int>.pbf', methods=['GET'])
+    app.add_route(preview, r'/', methods=['GET'])
+
+
+def check_file_exists(filename):
+    if not os.path.exists(filename):
+        print(f'file does not exists: {filename}, quitting...')
+        sys.exit(1)
+
+
 def main():
     parser = argparse.ArgumentParser(description='Fast VectorTile server with PostGIS backend')
     parser.add_argument('--tm2', type=str, help='TM2 source file (yaml)')
+    parser.add_argument('--mbtiles', type=str, help='read tiles from a mbtiles file')
     parser.add_argument('--style', type=str, help='GL Style to serve at /style.json')
     parser.add_argument('--pgdatabase', type=str, help='database name', default='osm')
     parser.add_argument('--pghost', type=str, help='postgres hostname', default='')
@@ -237,18 +274,35 @@ def main():
     parser.add_argument('--debug', action='store_true', help='activate sanic debug mode')
     parser.add_argument('--fonts', type=str, help='fonts location')
     args = parser.parse_args()
+    
+    if len(sys.argv) == 1:
+        # display help message when no args are passed.
+        parser.print_help()
+        sys.exit(1)
 
     if args.tm2:
+        check_file_exists(args.tm2)
         config_tm2(args.tm2)
+    elif args.mbtiles: 
+        check_file_exists(args.mbtiles)
+        config_mbtiles(args.mbtiles)
     else:
         # no tm2 file given, switching to direct connection to postgis layers
         app.add_route(get_tile_postgis, r'/<layer>/<z:int>/<x:int>/<y:int>.pbf', methods=['GET'])
+    if args.style:
+        check_file_exists(args.style)
+        Config.style = args.style
 
-    Config.style = args.style
-    Config.fonts = args.fonts
+    if args.fonts:
+        check_file_exists(args.fonts)
+        Config.fonts = args.fonts
 
     # interpolate values for postgres connection
-    Config.dsn = Config.dsn.format(**args.__dict__)
+    if not args.mbtiles:
+        Config.dsn = (
+            'postgres://{pguser}:{pgpassword}@{pghost}:{pgport}/{pgdatabase}'
+            .format(**args.__dict__)
+        )
 
     if args.cors:
         CORS(app)
