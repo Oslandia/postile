@@ -1,6 +1,16 @@
-# PosTile 
+<p align="center">
+  <a href=""><img src="assets/graphics/postile_logo.svg" alt="PostTile"></a>
+</p>
+<p align="center">
+	<a href="https://hub.docker.com/r/oslandia/postile/" target="_blank">
+	    <img src="https://images.microbadger.com/badges/image/oslandia/postile.svg" alt="Build Status">
+	</a>
+	<a href="https://pypi.org/project/postile" target="_blank">
+	    <img src="https://img.shields.io/pypi/v/postile" alt="Package version">
+	</a>
+</p>
 
-[![Docker image](https://images.microbadger.com/badges/image/oslandia/postile.svg)](https://hub.docker.com/r/oslandia/postile/)
+---
 
 Fast Mapbox Vector Tile Server mainly suited for the [openmaptiles vector tile schema](https://github.com/openmaptiles/openmaptiles)
 
