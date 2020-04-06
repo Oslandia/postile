@@ -25,7 +25,7 @@ Fast Mapbox Vector Tile Server mainly suited for the [openmaptiles vector tile s
 ## Requirements 
 
 - Python `>= 3.6`
-- for PostGIS backend, recent `st_amvt` function. At least PostGIS >= 2.4.0.
+- for PostGIS backend, recent `ST_AsMVT` function. At least PostGIS >= 2.4.0.
 
 
 ## Installation 
